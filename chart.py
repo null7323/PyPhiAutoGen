@@ -229,9 +229,26 @@ def get_movement_events(content: list, chart_ver: int, bpm: float):
     return ret
 
 
+def getNotes(line_content: dict[str, list], list_name: str, bpm: float):
+    data_list: list[dict] = line_content[list_name]
+    note_list: list[phi_note] = []
+
+    for ev_note in data_list:
+        tm = ev_note["time"]
+        floor_pos = ev_note["floorPosition"]
+        pos_x = ev_note["positionX"]
+        ty = ev_note["type"]
+        hold_tm = ev_note["holdTime"]
+        speed = ev_note["speed"]
+
+        note_list.append(phi_note(tm, ty, floor_pos, speed, pos_x, hold_tm, bpm))
+    note_list.sort(key=lambda x: x.time, reverse=False)
+    return note_list
+
+
 class phi_judge_line:
     __slots__ = ("content", "speedEvents", "moveEvents", "rotateEvents", "disappearEvents", "notesAbove",
-                 "notesBelow", "notes", "numOfNotesAbove", "numOfNotesBelow", "numOfNotes", "chartVersion",
+                 "notesBelow", "numOfNotesAbove", "numOfNotesBelow", "numOfNotes", "chartVersion",
                  "offset", "index", "bpm")
 
     def __init__(self, content: dict, index: int, chart_ver: int):
@@ -250,13 +267,39 @@ class phi_judge_line:
             content["judgeLineDisappearEvents"], phi_disappear_event, self.bpm
         )
         self.moveEvents = get_movement_events(content["judgeLineMoveEvents"], chart_ver, self.bpm)
+        self.notesAbove: list[phi_note] = getNotes(content, "notesAbove", self.bpm)
+        self.notesBelow: list[phi_note] = getNotes(content, "notesBelow", self.bpm)
 
 
 class phi_chart:
-    __slots__ = ("content", "version", "offset", "numOfNotes", "lines")
+    __slots__ = ("content", "version", "offset", "numOfNotes", "lines", "notes")
 
     def __init__(self, content: dict):
         self.content: dict = content
         self.version: int = content["formatVersion"]
         self.offset: float = content["offset"]
         self.numOfNotes: int = content["numOfNotes"]
+        self.lines: list[phi_judge_line] = list[phi_judge_line]()
+        line_id = 0
+        for data in content["judgeLineList"]:
+            self.lines.append(phi_judge_line(data, line_id, self.version))
+            line_id += 1
+        self.notes: list[phi_note] = []
+        for line in self.lines:
+            self.notes += line.notesAbove
+            self.notes += line.notesBelow
+        self.notes.sort(key=lambda x: x.real_time, reverse=False)
+
+        tm_map: dict[float, list[phi_note]] = {}
+        for n in self.notes:
+            tm = round(n.real_time, 6)
+            if tm not in tm_map.keys():
+                tm_map[tm] = [n, ]
+            else:
+                tm_map[tm].append(n)
+        for v in tm_map.values():
+            if len(v) > 1:
+                for n in v:
+                    n.multi_highlight = True
+
+
