@@ -84,7 +84,7 @@ def rearrange_speed_events(resolved_events: list[speed_event], bpm: float):
             continue
         last = copy.copy(rearranged_events[-1])
         if last.value != ev.value:
-            resolved_events.append(ev)
+            rearranged_events.append(ev)
             continue
         last.end_time = ev.end_time
         rearranged_events[-1] = ev
