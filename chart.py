@@ -1,3 +1,8 @@
+"""
+This module provides several types and functions to access Phigros chart.
+
+"""
+
 import json
 import copy
 
@@ -20,6 +25,7 @@ class speed_event:
 
 
 class phi_event_base:
+    """Represents a basic Phigros event."""
     __slots__ = ("start", "end", "start_time", "end_time", "real_start_time", "real_end_time")
 
     def __init__(self, start: float, end: float, start_tm: float, end_tm: float, bpm: float):
@@ -32,6 +38,7 @@ class phi_event_base:
 
 
 class phi_ver3_event_base(phi_event_base):
+    """Represents a Phigros event with new format."""
     __slots__ = ("start2", "end2")
 
     def __init__(self, start: float, end: float, start2: float, end2: float, start_tm: float, end_tm: float,
@@ -42,24 +49,37 @@ class phi_ver3_event_base(phi_event_base):
 
 
 class phi_move_event(phi_ver3_event_base):
+    """
+    Represents a judge line movement event, indicating how the center of judge line moves.\n
+    This event uses format 3.
+    """
     def __init__(self, start: float, end: float, start2: float, end2: float, start_tm: float, end_tm: float,
                  bpm: float):
         super(phi_move_event, self).__init__(start, end, start2, end2, start_tm, end_tm, bpm)
 
 
 class phi_rotate_event(phi_event_base):
+    """
+    Represents a judge line rotation event, indicating how the judge line rotates.\n
+    This event uses format 1.
+    """
     def __init__(self, start: float, end: float, start_tm: float, end_tm: float,
                  bpm: float):
         super(phi_rotate_event, self).__init__(start, end, start_tm, end_tm, bpm)
 
 
 class phi_disappear_event(phi_event_base):
+    """
+    Represents a judge line alpha event, indicating whether the judge line is transparent.\n
+    This event uses format 1.
+    """
     def __init__(self, start: float, end: float, start_tm: float, end_tm: float,
                  bpm: float):
         super(phi_disappear_event, self).__init__(start, end, start_tm, end_tm, bpm)
 
 
 class phi_note:
+    """Represents a note structure."""
     __slots__ = ("multi_highlight", "time", "note_type", "floor_position", "speed", "position_x", "hold_time",
                  "real_hold_time", "real_time")
 
@@ -95,7 +115,7 @@ def rearrange_speed_events(resolved_events: list[speed_event], bpm: float):
 
 
 def get_speed_events_from_dict(content: dict, chart_ver: int):
-    """Extracts speed events from judge line content"""
+    """Extracts speed events from judge line content. Chart version is required for parsing pattern determination."""
     bpm: float = content["bpm"]
     ev_list: list[dict] = content["speedEvents"]
     ret = list[speed_event]()
@@ -178,7 +198,7 @@ def rearrange_move_events(ev_list: list[phi_move_event], bpm: float):
 
 
 def get_typed_ver1_events(content: list, ev_type: type, bpm: float):
-    """Extracts events of old format (version 1)."""
+    """Extracts events of old format (version 1). Event type should be specified manually."""
     ret = list[ev_type]()
 
     for ev in content:
@@ -194,6 +214,7 @@ def get_typed_ver1_events(content: list, ev_type: type, bpm: float):
 
 
 def load_old_move_events(content: list, bpm: float):
+    """Loads old style movement events."""
     ret = list[phi_move_event]()
 
     for ev in content:
@@ -211,7 +232,9 @@ def load_old_move_events(content: list, bpm: float):
 
 
 def get_movement_events(content: list, chart_ver: int, bpm: float):
+    """Gets all movement events from json list. Chart version is required to match parsing pattern."""
     if chart_ver != 3:
+        # load version 1 events.
         return load_old_move_events(content, bpm)
 
     ret = list[phi_move_event]()
@@ -229,7 +252,8 @@ def get_movement_events(content: list, chart_ver: int, bpm: float):
     return ret
 
 
-def getNotes(line_content: dict[str, list], list_name: str, bpm: float):
+def get_notes(line_content: dict[str, list], list_name: str, bpm: float):
+    """Extracts note events from line content."""
     data_list: list[dict] = line_content[list_name]
     note_list: list[phi_note] = []
 
@@ -247,6 +271,7 @@ def getNotes(line_content: dict[str, list], list_name: str, bpm: float):
 
 
 class phi_judge_line:
+    """Represents a judge line structure."""
     __slots__ = ("content", "speedEvents", "moveEvents", "rotateEvents", "disappearEvents", "notesAbove",
                  "notesBelow", "numOfNotesAbove", "numOfNotesBelow", "numOfNotes", "chartVersion",
                  "offset", "index", "bpm")
@@ -267,11 +292,12 @@ class phi_judge_line:
             content["judgeLineDisappearEvents"], phi_disappear_event, self.bpm
         )
         self.moveEvents = get_movement_events(content["judgeLineMoveEvents"], chart_ver, self.bpm)
-        self.notesAbove: list[phi_note] = getNotes(content, "notesAbove", self.bpm)
-        self.notesBelow: list[phi_note] = getNotes(content, "notesBelow", self.bpm)
+        self.notesAbove: list[phi_note] = get_notes(content, "notesAbove", self.bpm)
+        self.notesBelow: list[phi_note] = get_notes(content, "notesBelow", self.bpm)
 
 
 class phi_chart:
+    """Represents a chart structure."""
     __slots__ = ("content", "version", "offset", "numOfNotes", "lines", "notes")
 
     def __init__(self, content: dict):
@@ -290,6 +316,7 @@ class phi_chart:
             self.notes += line.notesBelow
         self.notes.sort(key=lambda x: x.real_time, reverse=False)
 
+        # creates a <time - note list> map to identify what notes should be highlighted.
         tm_map: dict[float, list[phi_note]] = {}
         for n in self.notes:
             tm = round(n.real_time, 6)
@@ -299,7 +326,20 @@ class phi_chart:
                 tm_map[tm].append(n)
         for v in tm_map.values():
             if len(v) > 1:
+                # there are more than 1 notes being hit at the same time. mark them.
                 for n in v:
+                    # we only need to set this field this time.
+                    # for python always passes object reference.
                     n.multi_highlight = True
 
 
+def open_chart_file(file_name: str) -> phi_chart:
+    """Opens a chart file, initializes a new chart instance with the file content and returns the chart object."""
+    with open(file_name) as file_stream:
+        json_data = json.load(file_stream)
+    return phi_chart(json_data)
+
+
+def open_chart_string(json_string: str) -> phi_chart:
+    """Converts the json string to a dictionary, and returns a new chart instance with it."""
+    return phi_chart(eval(json_string))
