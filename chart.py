@@ -11,6 +11,11 @@ NOTE_TYPE_DRAG = 2
 NOTE_TYPE_HOLD = 3
 NOTE_TYPE_FLICK = 4
 
+__all__ = ["NOTE_TYPE_TAP", "NOTE_TYPE_FLICK", "NOTE_TYPE_HOLD", "NOTE_TYPE_DRAG",
+           "speed_event", "phi_move_event", "phi_note", "phi_chart", "phi_event_base",
+           "phi_judge_line", "phi_rotate_event", "phi_ver3_event_base", "phi_disappear_event",
+           "open_chart_file", "open_chart_string"]
+
 
 class speed_event:
     __slots__ = ("start_time", "end_time", "floor_position", "value", "real_start_time", "real_end_time")
@@ -22,6 +27,12 @@ class speed_event:
         self.value = value
         self.real_start_time = start_tm * 1.875 / bpm
         self.real_end_time = end_tm * 1.875 / bpm
+
+    def is_real_time_valid(self, real_time: float) -> bool:
+        return self.real_start_time <= real_time < self.real_end_time
+
+    def get_value_unchecked(self, real_time: float) -> float:
+        return (real_time - self.real_start_time) * self.value + self.floor_position
 
 
 class phi_event_base:
@@ -36,6 +47,19 @@ class phi_event_base:
         self.real_start_time = start_tm * 1.875 / bpm
         self.real_end_time = end_tm * 1.875 / bpm
 
+    def is_real_time_valid(self, real_time: float) -> bool:
+        """
+        Verify whether given time is in range.\n
+        :param real_time: The real time in seconds to check.
+        :return: A bool value. True if the time is valid; false otherwise.
+        """
+        return self.real_start_time <= real_time < self.real_end_time
+
+    def get_value_unchecked(self, real_time: float) -> float:
+        t2 = (real_time - self.real_start_time) / (self.real_end_time - self.real_start_time)
+        t1 = 1 - t2
+        return self.start * t1 + self.end * t2
+
 
 class phi_ver3_event_base(phi_event_base):
     """Represents a Phigros event with new format."""
@@ -46,6 +70,11 @@ class phi_ver3_event_base(phi_event_base):
         super(phi_ver3_event_base, self).__init__(start, end, start_tm, end_tm, bpm)
         self.start2 = start2
         self.end2 = end2
+
+    def get_value_unchecked(self, real_time: float) -> tuple[float, float]:
+        t2 = (real_time - self.real_start_time) / (self.real_end_time - self.real_start_time)
+        t1 = 1 - t2
+        return self.start * t1 + self.end * t2, 1 - self.start2 * t1 - self.end2 * t2
 
 
 class phi_move_event(phi_ver3_event_base):
@@ -277,6 +306,12 @@ class phi_judge_line:
                  "offset", "index", "bpm")
 
     def __init__(self, content: dict, index: int, chart_ver: int):
+        """
+        Initializes a new judge line structure.\n
+        :param content: The dict extracted from the json chart, containing judge line information.
+        :param index: The index to this judge line, which determines the render order.
+        :param chart_ver: Chart version.
+        """
         self.content = content
         self.index: int = index
         self.chartVersion = chart_ver
@@ -301,6 +336,10 @@ class phi_chart:
     __slots__ = ("content", "version", "offset", "numOfNotes", "lines", "notes")
 
     def __init__(self, content: dict):
+        """
+        Initializes a new chart object with specified dictionary extracted from json.
+        :param content: The dictionary containing chart data.
+        """
         self.content: dict = content
         self.version: int = content["formatVersion"]
         self.offset: float = content["offset"]

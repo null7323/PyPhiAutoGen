@@ -12,7 +12,7 @@ def none_call_back(placeholder: object):
     return
 
 
-class renderer:
+class sdl_renderer:
     __slots__ = ("handle", "width", "height", "parent")
 
     def __init__(self, parent):
@@ -113,12 +113,15 @@ class event_handler:
         self.state = event_handle_state()
 
     def add_callback(self, callback):
+        """Adds a callback to the handler."""
         self.callbacks.append(callback)
 
     def pop_first_callback(self):
+        """Removes the first callback."""
         self.callbacks.pop(0)
 
     def pop_last_callback(self):
+        """Removes the last callback."""
         self.callbacks.pop()
 
     def clear_callback(self):
@@ -138,11 +141,18 @@ class event_handler:
         self.state.set_accomplishment()
 
 
-class window:
+class sdl_window:
     __slots__ = ("handle", "renderer", "width", "height", "handler")
 
     @staticmethod
     def basic_sdl_event_handler(state: event_handle_state, win, event_list: list):
+        """
+        A basic event handler.\n
+        :param state: A structure that represents the handler's state.
+        :param win: The window object.
+        :param event_list: The SDL event to handle.
+        :return: None.
+        """
         for ev in event_list:
             if ev.type == 256:
                 # SDL_Event.SDL_QUIT == 256 -> true
@@ -163,16 +173,17 @@ class window:
             flags |= SDL_WINDOW_BORDERLESS
 
         self.handle = SDL_CreateWindow(caption.encode(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h, flags)
-        self.renderer = renderer(self)
+        self.renderer: sdl_renderer = sdl_renderer(self)
         self.handler = event_handler(self)
-        self.handler.add_callback(window.basic_sdl_event_handler)
+        self.handler.add_callback(sdl_window.basic_sdl_event_handler)
 
     def get_event_handler(self):
         """Returns the event handler of current window."""
         return self.handler
 
     def handle_events(self):
-        self.handler.handle(self, window.get_events())
+        """Calls the handle method of current handler."""
+        self.handler.handle(self, sdl_window.get_events())
 
     def destroy(self):
         if self.renderer is not None:
@@ -186,8 +197,9 @@ class window:
 
     @staticmethod
     def get_events():
+        """Gets all event waiting in SDL event queue."""
         ev_list = []
-        while True: # add this loop to create new SDL_Event.
+        while True:  # add this loop to create new SDL_Event.
             ev = SDL_Event()
             if SDL_PollEvent(byref(ev)) != 0:
                 ev_list.append(ev)
@@ -200,7 +212,7 @@ class window:
         return self.handle != 0
 
 
-class surface:
+class sdl_surface:
     __slots__ = ("width", "height", "handle", "parent")
 
     def __init__(self, ptr):
@@ -209,7 +221,14 @@ class surface:
         self.height = -1
 
     @classmethod
-    def generate(cls, w: int, h: int, depth: int = 32):
+    def generate(cls, w: int, h: int, depth: int = 32) -> surface:
+        """
+        Generates a new SDL surface using SDL_CreateRGBSurface, settings its blend mode to SDL_BLENDMODE_BLEND.\n
+        :param w: The width in pixel of new surface.
+        :param h: The height in pixel of new surface.
+        :param depth: The color depth. Default is 32.
+        :return: A new surface object.
+        """
         s = cls(0)
         s.width = int(w)
         s.height = int(h)
@@ -222,7 +241,14 @@ class surface:
         return self.handle != 0
 
     def blit_surface(self, src: SDL_Rect, dst: SDL_Rect, target):
-        SDL_BlitSurface(self.handle, byref(src), byref(target), byref(dst))
+        """
+        Blit current surface to target.\n
+        :param src:
+        :param dst:
+        :param target:
+        :return:
+        """
+        SDL_BlitSurface(self.handle, byref(src), target.handle, byref(dst))
 
     def destroy(self):
         if self.handle != 0:
@@ -230,9 +256,15 @@ class surface:
         self.handle = 0
 
     def lock(self):
+        """
+        Locks current surface.
+        """
         SDL_LockSurface(self.handle)
 
     def unlock(self):
+        """
+        Unlocks current surface.
+        """
         SDL_UnlockSurface(self.handle)
 
     @classmethod
@@ -249,10 +281,10 @@ class texture_access:
     render_target: int = SDL_TEXTUREACCESS_TARGET
 
 
-class texture:
+class sdl_texture:
     __slots__ = ("width", "height", "handle", "parent", "access")
 
-    def __init__(self, parent: renderer, w: int = -1, h: int = -1, access: int = SDL_TEXTUREACCESS_STATIC):
+    def __init__(self, parent: sdl_renderer, w: int = -1, h: int = -1, access: int = SDL_TEXTUREACCESS_STATIC):
         if w <= 0:
             w = parent.width
         if h <= 0:
@@ -305,7 +337,7 @@ class texture:
         return ret
 
     @classmethod
-    def from_surface(cls, data: surface, parent: renderer):
+    def from_surface(cls, data: sdl_surface, parent: sdl_renderer):
         tex = cls(parent, data.width, data.height)
         tex.destroy()
         tex.handle = SDL_CreateTextureFromSurface(parent.handle, data.handle)

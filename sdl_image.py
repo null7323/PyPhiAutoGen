@@ -6,20 +6,20 @@ from ctypes import cast, c_void_p, POINTER, c_uint8
 class sdl_image:
     __slots__ = ("tex", "width", "height", "parent")
 
-    def __init__(self, data: surface, parent: renderer):
+    def __init__(self, data: sdl_surface or None, parent: sdl_renderer):
         self.parent = parent
         if data is None or parent is None:
             self.tex = None
             self.width = 0
             self.height = 0
             return
-        self.tex = texture.from_surface(data, parent)
+        self.tex = sdl_texture.from_surface(data, parent)
         self.width = self.tex.width
         self.height = self.tex.height
 
     def crop(self, x: int, y: int, w: int, h: int):
         ret = sdl_image(None, self.tex.parent)
-        ret.tex = texture(self.tex.parent, w, h, texture_access.streaming)
+        ret.tex = sdl_texture(self.tex.parent, w, h, texture_access.streaming)
         ret.width = w
         ret.height = h
 
@@ -44,8 +44,8 @@ class sdl_image:
         self.parent = None
 
     @classmethod
-    def open_image(cls, path: str, parent: renderer):
+    def open_image(cls, path: str, parent: sdl_renderer):
         s = IMG_Load(path.encode())
-        ret = cls(surface(s), parent)
+        ret = cls(sdl_surface(s), parent)
         SDL_FreeSurface(s)
         return ret
