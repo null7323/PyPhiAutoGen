@@ -4,6 +4,7 @@ from sdl_image import *
 from sdl_transparent_cover import *
 from sdl_line import *
 from math import sin, cos, pi
+from wav_audio import pcm_u16_48khz_wave_audio
 
 
 class global_resource:
@@ -19,6 +20,10 @@ class global_resource:
     hold_head_hl: sdl_image = None
     hold_body_hl: sdl_image = None
     drag_hl: sdl_image = None
+
+    tap_sound: pcm_u16_48khz_wave_audio = None
+    drag_sound: pcm_u16_48khz_wave_audio = None
+    flick_sound: pcm_u16_48khz_wave_audio = None
 
     @classmethod
     def init_tap(cls, path: str, parent: sdl_renderer):
@@ -51,27 +56,31 @@ class global_resource:
         cls.hold_head_hl = sdl_image.open_image(head_path, parent)
         cls.hold_body_hl = sdl_image.open_image(body_path, parent)
 
-    @classmethod
-    def init_audio(cls):
-        required = SDL_AudioSpec(48000, AUDIO_U16, 2, 512)
-        result = SDL_AudioSpec(48000, AUDIO_U16, 2, 512)
-        SDL_OpenAudio(byref(required), byref(result))
-
 
 class render_resource:
-    pass
+    __slots__ = ("illustration_image", "audio_file")
+
+    def __init__(self, img: sdl_image, wav: pcm_u16_48khz_wave_audio):
+        self.illustration_image = img
+        self.audio_file = wav
+
+    @classmethod
+    def open_file(cls, img_path: str, wav_path: str, parent: sdl_renderer):
+        ret = cls(sdl_image.open_image(img_path, parent), pcm_u16_48khz_wave_audio.open_wav(wav_path))
 
 
 class render_options:
     """Represents a structure indicating render options."""
-    __slots__ = ("width", "height", "fps", "comparative_note_speed", "visibility_check",
+    __slots__ = ("width", "height", "fps", "cover_alpha", "comparative_note_speed", "visibility_check",
                  "all_perfect_indication", "show_hidden_line")
 
-    def __init__(self, w: int, h: int, fps: int = 60, note_speed: float = 1, visibility_check: bool = True,
+    def __init__(self, w: int, h: int, fps: int = 60, cover_alpha: int = 0x6F, note_speed: float = 1,
+                 visibility_check: bool = True,
                  all_perfect_indication: bool = True, show_hidden_line: bool = False):
         self.width = w
         self.height = h
         self.fps = fps
+        self.cover_alpha = cover_alpha
         self.comparative_note_speed = note_speed
         self.visibility_check = visibility_check
         self.all_perfect_indication = all_perfect_indication
@@ -208,17 +217,22 @@ class judge_line_renderer:
 
 
 class chart_renderer:
-    __slots__ = ("chart_object", "judge_line_renderer_list", "window")
+    __slots__ = ("chart_object", "judge_line_renderer_list", "window", "cover", "bg")
 
-    def __init__(self, init_chart: phi_chart, render_opt: render_options):
+    def __init__(self, init_chart: phi_chart, render_opt: render_options, illustration_path: str = ""):
         self.chart_object = init_chart
         self.window = sdl_window("Autoplay", render_opt.width, render_opt.height)
         self.judge_line_renderer_list = list[judge_line_renderer]()
+        self.cover = sdl_transparent_cover(self.window.renderer, (0, 0, 0, render_opt.cover_alpha))
+        self.bg = None if illustration_path == "" else sdl_image.open_image(illustration_path, self.window.renderer)
         for line in init_chart.lines:
             self.judge_line_renderer_list.append(judge_line_renderer(line, self.window, render_opt))
 
     def render_frame(self):
         self.window.renderer.clear()
+        if self.bg is not None:
+            self.bg.tex.direct_copy_to_parent()
+            self.cover.draw_cover()
         for line_renderer in self.judge_line_renderer_list:
             line_renderer.render_line()
 
