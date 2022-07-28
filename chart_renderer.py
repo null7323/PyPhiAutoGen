@@ -4,10 +4,14 @@ from sdl_image import *
 from sdl_transparent_cover import *
 from sdl_line import *
 from math import sin, cos, pi
-from wav_audio import pcm_u16_48khz_wave_audio
+from wav_audio import audio_file
 
 
 class global_resource:
+    """
+    Represents resources that every renderer instance uses.
+    """
+
     tap: sdl_image = None
     flick: sdl_image = None
     hold_head: sdl_image = None
@@ -21,9 +25,11 @@ class global_resource:
     hold_body_hl: sdl_image = None
     drag_hl: sdl_image = None
 
-    tap_sound: pcm_u16_48khz_wave_audio = None
-    drag_sound: pcm_u16_48khz_wave_audio = None
-    flick_sound: pcm_u16_48khz_wave_audio = None
+    tap_sound: audio_file or None = None
+    drag_sound: audio_file or None = None
+    flick_sound: audio_file or None = None
+
+    note_sound_map: dict[int, audio_file] or None = None
 
     @classmethod
     def init_tap(cls, path: str, parent: sdl_renderer):
@@ -56,17 +62,44 @@ class global_resource:
         cls.hold_head_hl = sdl_image.open_image(head_path, parent)
         cls.hold_body_hl = sdl_image.open_image(body_path, parent)
 
+    @classmethod
+    def init_tap_hold_sound(cls, path: str):
+        cls.tap_sound = audio_file.open_wav_file(path)
+
+    @classmethod
+    def init_flick_sound(cls, path: str):
+        cls.flick_sound = audio_file.open_wav_file(path)
+
+    @classmethod
+    def init_drag_sound(cls, path: str):
+        cls.drag_sound = audio_file.open_wav_file(path)
+
+    @classmethod
+    def generate_note_sound_map(cls):
+        cls.note_sound_map = {
+            NOTE_TYPE_TAP: cls.tap_sound,
+            NOTE_TYPE_FLICK: cls.flick_sound,
+            NOTE_TYPE_DRAG: cls.drag_sound,
+            NOTE_TYPE_HOLD: cls.tap_sound
+        }
+
+    @classmethod
+    def close_sound(cls):
+        cls.tap_sound = None
+        cls.flick_sound = None
+        cls.drag_sound = None
+
 
 class render_resource:
     __slots__ = ("illustration_image", "audio_file")
 
-    def __init__(self, img: sdl_image, wav: pcm_u16_48khz_wave_audio):
+    def __init__(self, img: sdl_image, wav: audio_file):
         self.illustration_image = img
         self.audio_file = wav
 
     @classmethod
     def open_file(cls, img_path: str, wav_path: str, parent: sdl_renderer):
-        ret = cls(sdl_image.open_image(img_path, parent), pcm_u16_48khz_wave_audio.open_wav(wav_path))
+        return cls(sdl_image.open_image(img_path, parent), audio_file.open_wav_file(wav_path))
 
 
 class render_options:
@@ -88,6 +121,24 @@ class render_options:
 
     def get_line_color(self) -> tuple[int, int, int, int]:
         return (0xfe, 0xff, 0xa9, 0xff) if self.all_perfect_indication else (0xff, 0xff, 0xff, 0xff)
+
+
+class hit_effect_player:
+    __slots__ = ("note_list", "index")
+
+    def __init__(self, list_of_notes: list[phi_note]):
+        self.note_list = list_of_notes
+        self.index: int = 0
+
+    def play_time_less_than(self, tm: float):
+        len_of_notes = len(self.note_list)
+        while self.index < len_of_notes:
+            n = self.note_list[self.index]
+            if n.real_time < tm:
+                global_resource.note_sound_map[n.note_type].async_play()
+                self.index += 1
+                continue
+            break
 
 
 class judge_line_renderer:
@@ -157,15 +208,29 @@ class judge_line_renderer:
 
     def advance_frame(self):
         self.real_time += (1 / self.opt.fps)
+        '''
         for k in self.instant_judged_map.keys():
             if k < self.real_time:
                 self.instant_judged_map[k] = True
                 continue
             break
+        '''
         self.adjust_line_state()
 
     def render_line(self):
         self.draw_line.draw(self.line_x, self.line_y, self.rotation)
+
+    @staticmethod
+    def get_instant_note_image(n: phi_note):
+        match n.note_type:
+            case 1:
+                return global_resource.tap_hl if n.multi_highlight else global_resource.tap
+            case 2:
+                return global_resource.drag_hl if n.multi_highlight else global_resource.drag
+            case 4:
+                return global_resource.flick_hl if n.multi_highlight else global_resource.flick
+            case _:
+                return None
 
     def draw_instant_notes_above(self):
         w, h = self.opt.width, self.opt.height
@@ -198,26 +263,12 @@ class judge_line_renderer:
                     continue
 
             note_height = base_note_height
-            img = global_resource.tap
-
-            if n.note_type == NOTE_TYPE_TAP:
-                if n.multi_highlight:
-                    img = global_resource.tap_hl
-                note_height /= 2
-            elif n.note_type == NOTE_TYPE_FLICK:
-                if n.multi_highlight:
-                    img = global_resource.flick_hl
-                else:
-                    img = global_resource.flick
-            else:
-                if n.multi_highlight:
-                    img = global_resource.drag_hl
-                else:
-                    img = global_resource.drag
+            img = judge_line_renderer.get_instant_note_image(n)
 
 
 class chart_renderer:
-    __slots__ = ("chart_object", "judge_line_renderer_list", "window", "cover", "bg")
+    __slots__ = ("chart_object", "judge_line_renderer_list", "window",
+                 "cover", "bg", "effect_sound_player", "real_time", "fps")
 
     def __init__(self, init_chart: phi_chart, render_opt: render_options, illustration_path: str = ""):
         self.chart_object = init_chart
@@ -225,11 +276,15 @@ class chart_renderer:
         self.judge_line_renderer_list = list[judge_line_renderer]()
         self.cover = sdl_transparent_cover(self.window.renderer, (0, 0, 0, render_opt.cover_alpha))
         self.bg = None if illustration_path == "" else sdl_image.open_image(illustration_path, self.window.renderer)
+        self.real_time = 0
+        self.fps = render_opt.fps
+        self.effect_sound_player = hit_effect_player(init_chart.notes)
         for line in init_chart.lines:
             self.judge_line_renderer_list.append(judge_line_renderer(line, self.window, render_opt))
 
     def render_frame(self):
         self.window.renderer.clear()
+        self.effect_sound_player.play_time_less_than(self.real_time)
         if self.bg is not None:
             self.bg.tex.direct_copy_to_parent()
             self.cover.draw_cover()
@@ -238,3 +293,4 @@ class chart_renderer:
 
         for line_renderer in self.judge_line_renderer_list:
             line_renderer.advance_frame()
+        self.real_time += 1 / self.fps

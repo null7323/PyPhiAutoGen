@@ -1,33 +1,29 @@
+import sdl2
 from sdl2.sdlmixer import *
 
-__all__ = ["pcm_u16_48khz_wave_audio", ]
+
+__all__ = ["audio_file", ]
 
 
-class pcm_u16_48khz_wave_audio:
+class audio_file:
     __slots__ = ("sound_object", )
-
-    @classmethod
-    def open_audio(cls):
-        Mix_OpenAudio(48000, MIX_DEFAULT_FORMAT, 2, 2048)
-
-    @classmethod
-    def close_audio(cls):
-        Mix_CloseAudio()
 
     def __init__(self, sound_ptr):
         self.sound_object = sound_ptr
 
     @classmethod
-    def open_wav(cls, file_path: str):
-        sound_object = Mix_LoadMUS(file_path.encode("ascii"))
-        return cls(sound_object)
-
-    def async_play(self):
-        Mix_PlayMusic(self.sound_object, 1)
-
-    def destroy(self):
-        Mix_FreeMusic(self.sound_object)
+    def init(cls):
+        Mix_OpenAudio(48000, sdl2.AUDIO_U16, 2, 256)
+        Mix_AllocateChannels(28)
 
     @classmethod
-    def is_playing_any(cls):
-        return Mix_PlayingMusic()
+    def close(cls):
+        Mix_CloseAudio()
+
+    @classmethod
+    def open_wav_file(cls, file_path: str):
+        ptr = Mix_LoadWAV(file_path.encode("utf-8"))
+        return cls(ptr)
+
+    def async_play(self):
+        Mix_PlayChannel(-1, self.sound_object, 0)

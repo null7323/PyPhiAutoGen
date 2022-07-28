@@ -11,6 +11,9 @@ NOTE_TYPE_DRAG = 2
 NOTE_TYPE_HOLD = 3
 NOTE_TYPE_FLICK = 4
 
+NOTE_DIRECTION_NORMAL = 0
+NOTE_DIRECTION_REVERSED = 1
+
 __all__ = ["NOTE_TYPE_TAP", "NOTE_TYPE_FLICK", "NOTE_TYPE_HOLD", "NOTE_TYPE_DRAG",
            "speed_event", "phi_move_event", "phi_note", "phi_chart", "phi_event_base",
            "phi_judge_line", "phi_rotate_event", "phi_ver3_event_base", "phi_disappear_event",
@@ -113,7 +116,7 @@ class phi_note:
                  "real_hold_time", "real_time")
 
     def __init__(self, tm: int, note_ty: int, floor_pos: float, speed: float,
-                 pos_x: float, hold_tm: float, bpm: float):
+                 pos_x: float, hold_tm: float, bpm: float, direction: int):
         self.multi_highlight = False
         self.time = tm
         self.note_type = note_ty
@@ -286,6 +289,8 @@ def get_notes(line_content: dict[str, list], list_name: str, bpm: float):
     data_list: list[dict] = line_content[list_name]
     note_list: list[phi_note] = []
 
+    note_direction = NOTE_DIRECTION_NORMAL if list_name == "notesAbove" else NOTE_DIRECTION_REVERSED
+
     for ev_note in data_list:
         tm = ev_note["time"]
         floor_pos = ev_note["floorPosition"]
@@ -294,7 +299,7 @@ def get_notes(line_content: dict[str, list], list_name: str, bpm: float):
         hold_tm = ev_note["holdTime"]
         speed = ev_note["speed"]
 
-        note_list.append(phi_note(tm, ty, floor_pos, speed, pos_x, hold_tm, bpm))
+        note_list.append(phi_note(tm, ty, floor_pos, speed, pos_x, hold_tm, bpm, note_direction))
     note_list.sort(key=lambda x: x.time, reverse=False)
     return note_list
 
