@@ -1,5 +1,8 @@
+from ctypes import POINTER
+
 from sdl2.sdlttf import *
 from sdl_render import sdl_surface, sdl_texture, sdl_renderer
+from sdl2 import SDL_Rect, SDL_Surface, SDL_FreeSurface
 
 
 class sdl_font:
@@ -35,7 +38,7 @@ class sdl_font:
 
 
 class sdl_text:
-    __slots__ = ("font", "text", "tex", "col")
+    __slots__ = ("font", "text", "tex", "col", "w", "h")
 
     def __init__(self, text: str, font: sdl_font,
                  parent: sdl_renderer, foreground_color: tuple[int, int, int] = (255, 255, 255, 255)):
@@ -44,4 +47,11 @@ class sdl_text:
         self.col = SDL_Color(foreground_color[0], foreground_color[1], foreground_color[2], foreground_color[3])
         s = TTF_RenderText_Blended(font.p_font, text.encode("utf-8"), self.col)
         self.tex = sdl_texture.from_surface(sdl_surface(s), parent)
+        surface_copy: SDL_Surface = s.content
+        self.w = surface_copy.w
+        self.h = surface_copy.h
+        SDL_FreeSurface(s)
+
+    def draw(self, area: SDL_Rect):
+        self.tex.copy_to_parent(area)
 
