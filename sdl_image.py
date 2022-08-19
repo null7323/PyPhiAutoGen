@@ -18,12 +18,12 @@ class sdl_image:
         self.height = self.tex.height
 
     def crop(self, x: int, y: int, w: int, h: int):
-        ret = sdl_image(None, self.tex.parent)
-        ret.tex = sdl_texture(self.tex.parent, w, h, texture_access.streaming)
-        ret.width = w
-        ret.height = h
+        x, y, w, h = int(x), int(y), int(w), int(h)
 
         parent = self.tex.parent
+        ret = sdl_image(None, parent)
+        ret.tex = sdl_texture.generate(self.tex.parent, w, h, texture_access.render_target)
+
         parent.set_render_texture(ret.tex)
 
         area = SDL_Rect(x, y, w, h)
@@ -33,8 +33,25 @@ class sdl_image:
 
         return ret
 
+    def crop_to_fit(self, width_height_rat: float):
+        curr_width_height_rat = self.width / self.height
+
+        if curr_width_height_rat == width_height_rat:
+            return self.crop(0, 0, self.width, self.height)
+
+        if curr_width_height_rat > width_height_rat:
+            # width is wider, so we cut its width.
+            narrowed_width = self.height * width_height_rat
+            return self.crop((self.width - narrowed_width) // 2, 0, narrowed_width, self.height)
+
+        narrowed_height = self.width / width_height_rat
+        return self.crop(0, (self.height - narrowed_height) // 2, self.width, narrowed_height)
+
     def set_alpha(self, a: int):
         self.tex.set_alpha(a)
+
+    def copy(self):
+        return self.crop(0, 0, self.width, self.height)
 
     def destroy(self):
         if self.tex is not None:

@@ -216,6 +216,7 @@ class sdl_surface:
     __slots__ = ("width", "height", "handle", "parent")
 
     def __init__(self, ptr):
+        """Directly initializes this instance with a pointer to SDL_Surface structure."""
         self.handle = ptr
         self.width = -1
         self.height = -1
@@ -284,19 +285,30 @@ class texture_access:
 class sdl_texture:
     __slots__ = ("width", "height", "handle", "parent", "access")
 
-    def __init__(self, parent: sdl_renderer, w: int = -1, h: int = -1, access: int = SDL_TEXTUREACCESS_STATIC):
+    def __init__(self, w: int, h: int, ptr, parent: sdl_renderer, access: int):
         if w <= 0:
             w = parent.width
         if h <= 0:
             h = parent.height
         self.width = int(w)
         self.height = int(h)
+        self.handle = ptr
         self.parent = parent
         self.access = access
 
-        self.handle = SDL_CreateTexture(parent.handle, c_uint(SDL_PIXELFORMAT_ARGB8888),
-                                        c_int(access), c_int(self.width), c_int(self.height))
-        SDL_SetTextureBlendMode(self.handle, SDL_BLENDMODE_BLEND)
+    @classmethod
+    def generate(cls, parent: sdl_renderer, w: int = -1, h: int = -1, access: int = SDL_TEXTUREACCESS_STATIC):
+        if w <= 0:
+            w = parent.width
+        if h <= 0:
+            h = parent.height
+        w = int(w)
+        h = int(h)
+
+        handle = SDL_CreateTexture(parent.handle, c_uint(SDL_PIXELFORMAT_ARGB8888),
+                                   c_int(access), c_int(w), c_int(h))
+        SDL_SetTextureBlendMode(handle, SDL_BLENDMODE_BLEND)
+        return cls(w, h, handle, parent, access)
 
     def destroy(self):
         if self.handle != 0:
@@ -329,7 +341,7 @@ class sdl_texture:
 
     @classmethod
     def copy(cls, tex):
-        ret = cls(tex.parent, tex.width, tex.height, texture_access.render_target)
+        ret = cls(tex.width, tex.height, None, tex.parent, texture_access.render_target)
         raw_target = ret.parent.get_render_target()
         ret.parent.set_render_texture(ret)
         tex.direct_copy_to_parent()
@@ -338,8 +350,7 @@ class sdl_texture:
 
     @classmethod
     def from_surface(cls, data: sdl_surface, parent: sdl_renderer):
-        tex = cls(parent, data.width, data.height)
-        tex.destroy()
-        tex.handle = SDL_CreateTextureFromSurface(parent.handle, data.handle)
+        tex = cls(data.width, data.height, SDL_CreateTextureFromSurface(parent.handle, data.handle), parent,
+                  texture_access.static)
         SDL_SetTextureBlendMode(tex.handle, SDL_BLENDMODE_BLEND)
         return tex

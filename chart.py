@@ -306,8 +306,8 @@ def get_notes(line_content: dict[str, list], list_name: str, bpm: float):
 
 class phi_judge_line:
     """Represents a judge line structure."""
-    __slots__ = ("content", "speedEvents", "moveEvents", "rotateEvents", "disappearEvents", "notesAbove",
-                 "notesBelow", "numOfNotesAbove", "numOfNotesBelow", "numOfNotes", "chartVersion",
+    __slots__ = ("content", "speed_events", "move_events", "rotate_events", "disappear_events", "notes_above",
+                 "notes_below", "num_notes_above", "num_notes_below", "num_notes", "chart_version",
                  "offset", "index", "bpm")
 
     def __init__(self, content: dict, index: int, chart_ver: int):
@@ -319,21 +319,21 @@ class phi_judge_line:
         """
         self.content = content
         self.index: int = index
-        self.chartVersion = chart_ver
+        self.chart_version = chart_ver
         self.bpm: float = content["bpm"]
-        self.numOfNotes: int = content["numOfNotes"]
-        self.numOfNotesAbove: int = max(content["numOfNotesAbove"], 0)
-        self.numOfNotesBelow: int = max(content["numOfNotesBelow"], 0)
-        self.speedEvents = get_speed_events_from_dict(content, chart_ver)
-        self.rotateEvents: list[phi_rotate_event] = get_typed_ver1_events(
+        self.num_notes: int = content["numOfNotes"]
+        self.num_notes_above: int = max(content["numOfNotesAbove"], 0)
+        self.num_notes_below: int = max(content["numOfNotesBelow"], 0)
+        self.speed_events = get_speed_events_from_dict(content, chart_ver)
+        self.rotate_events: list[phi_rotate_event] = get_typed_ver1_events(
             content["judgeLineRotateEvents"], phi_rotate_event, self.bpm
         )
-        self.disappearEvents: list[phi_disappear_event] = get_typed_ver1_events(
+        self.disappear_events: list[phi_disappear_event] = get_typed_ver1_events(
             content["judgeLineDisappearEvents"], phi_disappear_event, self.bpm
         )
-        self.moveEvents = get_movement_events(content["judgeLineMoveEvents"], chart_ver, self.bpm)
-        self.notesAbove: list[phi_note] = get_notes(content, "notesAbove", self.bpm)
-        self.notesBelow: list[phi_note] = get_notes(content, "notesBelow", self.bpm)
+        self.move_events = get_movement_events(content["judgeLineMoveEvents"], chart_ver, self.bpm)
+        self.notes_above: list[phi_note] = get_notes(content, "notesAbove", self.bpm)
+        self.notes_below: list[phi_note] = get_notes(content, "notesBelow", self.bpm)
 
 
 class phi_chart:
@@ -356,8 +356,8 @@ class phi_chart:
             line_id += 1
         self.notes: list[phi_note] = []
         for line in self.lines:
-            self.notes += line.notesAbove
-            self.notes += line.notesBelow
+            self.notes += line.notes_above
+            self.notes += line.notes_below
         self.notes.sort(key=lambda x: x.real_time, reverse=False)
 
         # creates a <time - note list> map to identify what notes should be highlighted.
