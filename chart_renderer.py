@@ -144,7 +144,7 @@ class hit_effect_player:
 class judge_line_renderer:
     """Represents a judge line renderer."""
     __slots__ = ("judge_line", "win", "opt", "real_time", "line_x", "line_y", "rotation", "position_y", "draw_line",
-                 "instant_judged_map")
+                 "instant_judged_map", "last_alpha_index", "last_move_index", "last_rotate_index")
 
     def __init__(self, line_data: phi_judge_line, parent_window: sdl_window, options: render_options):
         self.judge_line = line_data
@@ -155,17 +155,20 @@ class judge_line_renderer:
         self.line_y = 0
         self.rotation = 0
         self.position_y = 0
+        self.last_alpha_index = 0
+        self.last_move_index = 0
+        self.last_rotate_index = 0
         self.instant_judged_map = dict[float, bool]()
 
         scale = options.height / 18.75 if options.width > options.height * 0.75 else options.height / 14.0625
         line_len = int(options.width * 3)
-        line_width = int(round(scale * 0.15 * 0.85))
+        line_width = int(round(scale * 0.15 * 0.925))
 
         self.draw_line = sdl_line(parent_window.renderer, line_len, line_width, options.get_line_color())
 
-        for n in self.judge_line.notesAbove:
+        for n in self.judge_line.notes_above:
             self.instant_judged_map[n.real_time] = False
-        for n in self.judge_line.notesBelow:
+        for n in self.judge_line.notes_below:
             self.instant_judged_map[n.real_time] = False
 
     def adjust_line_state(self):
@@ -176,34 +179,43 @@ class judge_line_renderer:
 
     def adjust_speed(self):
         real_time = self.real_time
-        for ev in self.judge_line.speedEvents:
+        for ev in self.judge_line.speed_events:
             if ev.is_real_time_valid(real_time):
                 self.position_y = ev.get_value_unchecked(real_time)
                 return
 
     def adjust_rotation(self):
         real_time = self.real_time
-        for ev in self.judge_line.rotateEvents:
+        rotate_events = self.judge_line.rotate_events
+        for i in range(self.last_rotate_index, len(rotate_events)):
+            ev = rotate_events[i]
             if ev.is_real_time_valid(real_time):
                 self.rotation = -ev.get_value_unchecked(real_time)
+                self.last_rotate_index = i
                 return
 
     def adjust_alpha(self):
         real_time = self.real_time
-        for ev in self.judge_line.disappearEvents:
+        alpha_events = self.judge_line.disappear_events
+        for i in range(self.last_alpha_index, len(alpha_events)):
+            ev = alpha_events[i]
             if ev.is_real_time_valid(real_time):
                 alpha = int(ev.get_value_unchecked(real_time) * 255.0)
                 self.draw_line.set_alpha(alpha)
+                self.last_alpha_index = i
                 return
 
     def adjust_movement(self):
         real_time = self.real_time
         w, h = self.opt.width, self.opt.height
-        for ev in self.judge_line.moveEvents:
+        move_events = self.judge_line.move_events
+        for i in range(self.last_move_index, len(move_events)):
+            ev = move_events[i]
             if ev.is_real_time_valid(real_time):
                 x, y = ev.get_value_unchecked(real_time)
                 self.line_x = int(w * x)
                 self.line_y = int(h * y)
+                self.last_move_index = i
                 return
 
     def advance_frame(self):
@@ -239,7 +251,7 @@ class judge_line_renderer:
         sin_value = sin(pi / 180.0 * self.rotation)
         cos_value = cos(pi / 180.0 * self.rotation)
         base_note_height = 0.018457 * h
-        for n in self.judge_line.notesAbove:
+        for n in self.judge_line.notes_above:
             if n.note_type == NOTE_TYPE_HOLD:
                 continue
             if self.instant_judged_map[n.real_time]:
@@ -276,6 +288,12 @@ class chart_renderer:
         self.judge_line_renderer_list = list[judge_line_renderer]()
         self.cover = sdl_transparent_cover(self.window.renderer, (0, 0, 0, render_opt.cover_alpha))
         self.bg = None if illustration_path == "" else sdl_image.open_image(illustration_path, self.window.renderer)
+
+        if self.bg is not None:
+            old = self.bg
+            self.bg = old.crop_to_fit(render_opt.width / render_opt.height)
+            old.destroy()
+
         self.real_time = 0
         self.fps = render_opt.fps
         self.effect_sound_player = hit_effect_player(init_chart.notes)
