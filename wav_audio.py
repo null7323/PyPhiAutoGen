@@ -6,15 +6,16 @@ __all__ = ["audio_file", ]
 
 
 class audio_file:
-    __slots__ = ("sound_object", )
+    __slots__ = ("sound_object", "currently_used_channel")
 
     def __init__(self, sound_ptr):
         self.sound_object = sound_ptr
+        self.currently_used_channel: int = -1
 
     @classmethod
     def init(cls):
         Mix_OpenAudio(48000, sdl2.AUDIO_U16, 2, 256)
-        Mix_AllocateChannels(28)
+        Mix_AllocateChannels(40)
 
     @classmethod
     def close(cls):
@@ -26,4 +27,4 @@ class audio_file:
         return cls(ptr)
 
     def async_play(self):
-        Mix_PlayChannel(-1, self.sound_object, 0)
+        self.currently_used_channel = Mix_PlayChannel(-1, self.sound_object, 0)
