@@ -4,12 +4,17 @@ import copy
 from sdl2 import *
 from sdl2.render import *
 from sdl2.video import *
-from ctypes import byref, c_int, c_uint, c_uint8, c_void_p, c_double
+from ctypes import byref, c_int, c_uint, c_uint8, c_void_p, c_double, POINTER
 from functools import singledispatch
 
 
 def none_call_back(placeholder: object):
     return
+
+
+class render_target:
+    def get_id(self):
+        raise NotImplementedError("Render target reset operation not implemented.")
 
 
 class sdl_renderer:
@@ -141,8 +146,9 @@ class event_handler:
         self.state.set_accomplishment()
 
 
-class sdl_window:
-    __slots__ = ("handle", "renderer", "width", "height", "handler")
+class sdl_window(render_target):
+    __slots__ = ("handle", "renderer", "width", "height", "handler", "super_sampling_layer",
+                 "internal_width", "internal_height")
 
     @staticmethod
     def basic_sdl_event_handler(state: event_handle_state, win, event_list: list):
@@ -159,23 +165,39 @@ class sdl_window:
                 win.destroy()
                 state.set_interruption()
 
-    def __init__(self, caption: str, w: int, h: int, fullScreen: bool = False, borderless: bool = False):
+    def __init__(self, caption: str, w: int, h: int, fullScreen: bool = False, borderless: bool = False,
+                 super_sampling: bool = False):
         if fullScreen:
             mode = SDL_DisplayMode()
             SDL_GetCurrentDisplayMode(0, byref(mode))
             w = mode.w
             h = mode.h
-        self.width = w
-        self.height = h
+        self.internal_width = self.width = w
+        self.internal_height = self.height = h
         flags = SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_SHOWN
 
         if borderless:
             flags |= SDL_WINDOW_BORDERLESS
 
         self.handle = SDL_CreateWindow(caption.encode(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, w, h, flags)
+
+        if super_sampling:
+            self.width *= 2
+            self.height *= 2
         self.renderer: sdl_renderer = sdl_renderer(self)
         self.handler = event_handler(self)
         self.handler.add_callback(sdl_window.basic_sdl_event_handler)
+        if super_sampling:
+            self.super_sampling_layer = sdl_texture.generate(self.renderer, self.width, self.height,
+                                                             texture_access.render_target)
+        else:
+            self.super_sampling_layer = None
+
+    def create_super_sampling_layer(self):
+        if self.super_sampling_layer is not None:
+            self.super_sampling_layer.destroy()
+        self.super_sampling_layer = sdl_texture.generate(self.renderer, self.width, self.height,
+                                                         texture_access.render_target)
 
     def get_event_handler(self):
         """Returns the event handler of current window."""
@@ -185,13 +207,27 @@ class sdl_window:
         """Calls the handle method of current handler."""
         self.handler.handle(self, sdl_window.get_events())
 
+    def try_use_super_sampling_layer(self):
+        if self.super_sampling_layer is not None:
+            self.renderer.set_render_texture(self.super_sampling_layer)
+
+    def render_layer_to_window(self):
+        self.renderer.reset_render_target()
+        if self.super_sampling_layer is not None:
+            #  self.super_sampling_layer.copy_to_parent(SDL_Rect(0, 0, self.internal_width, self.internal_height))
+            self.super_sampling_layer.direct_copy_to_parent()
+
     def destroy(self):
+        if self.super_sampling_layer is not None:
+            self.super_sampling_layer.destroy()
+
         if self.renderer is not None:
             self.renderer.destroy()
 
         if self.handle != 0:
             SDL_DestroyWindow(self.handle)
 
+        self.super_sampling_layer = None
         self.renderer = None
         self.handle = 0
 
@@ -210,6 +246,9 @@ class sdl_window:
     def is_window_available(self):
         """Determines whether current window is available."""
         return self.handle != 0
+
+    def get_id(self):
+        return 0
 
 
 class sdl_surface:
@@ -282,7 +321,7 @@ class texture_access:
     render_target: int = SDL_TEXTUREACCESS_TARGET
 
 
-class sdl_texture:
+class sdl_texture(render_target):
     __slots__ = ("width", "height", "handle", "parent", "access")
 
     def __init__(self, w: int, h: int, ptr, parent: sdl_renderer, access: int):
@@ -333,6 +372,11 @@ class sdl_texture:
         SDL_RenderCopyEx(self.parent.handle, self.handle, c_void_p(0), byref(area),
                          c_angle, byref(center), SDL_FLIP_NONE)
 
+    def direct_rotate_copy_to_parent(self, area: SDL_Rect, angle: float):
+        c_angle = c_double(angle)
+        SDL_RenderCopyEx(self.parent.handle, self.handle, c_void_p(0), byref(area),
+                         c_angle, c_void_p(0), SDL_FLIP_NONE)
+
     def is_texture_available(self):
         return self.handle != 0
 
@@ -354,3 +398,6 @@ class sdl_texture:
                   texture_access.static)
         SDL_SetTextureBlendMode(tex.handle, SDL_BLENDMODE_BLEND)
         return tex
+
+    def get_id(self):
+        return self.handle

@@ -1,3 +1,5 @@
+import copy
+
 from chart import *
 from sdl_render import *
 from sdl_image import *
@@ -234,6 +236,7 @@ class judge_line_renderer:
 
     @staticmethod
     def get_instant_note_image(n: phi_note):
+        '''
         match n.note_type:
             case 1:
                 return global_resource.tap_hl if n.multi_highlight else global_resource.tap
@@ -243,6 +246,12 @@ class judge_line_renderer:
                 return global_resource.flick_hl if n.multi_highlight else global_resource.flick
             case _:
                 return None
+        '''
+        hl_map = [global_resource.tap_hl, global_resource.drag_hl, None, global_resource.flick_hl]
+        single_map = [global_resource.tap, global_resource.drag, None, global_resource.flick]
+        if n.multi_highlight:
+            return hl_map[n.note_type - 1]
+        return single_map[n.note_type - 1]
 
     def draw_instant_notes_above(self):
         w, h = self.opt.width, self.opt.height
@@ -282,12 +291,14 @@ class chart_renderer:
     __slots__ = ("chart_object", "judge_line_renderer_list", "window",
                  "cover", "bg", "effect_sound_player", "real_time", "fps")
 
-    def __init__(self, init_chart: phi_chart, render_opt: render_options, illustration_path: str = ""):
+    def __init__(self, init_chart: phi_chart, render_opt: render_options, illustration_path: str = "",
+                 super_sampling: bool = False):
         self.chart_object = init_chart
-        self.window = sdl_window("Autoplay", render_opt.width, render_opt.height)
+        self.window = sdl_window("Autoplay", render_opt.width, render_opt.height, False, False, super_sampling)
         self.judge_line_renderer_list = list[judge_line_renderer]()
         self.cover = sdl_transparent_cover(self.window.renderer, (0, 0, 0, render_opt.cover_alpha))
-        self.bg = None if illustration_path == "" else sdl_image.open_image(illustration_path, self.window.renderer)
+        self.bg = None if illustration_path == "" else sdl_image.open_image(illustration_path, self.window.renderer,
+                                                                            (2048, 1080))
 
         if self.bg is not None:
             old = self.bg
@@ -297,6 +308,11 @@ class chart_renderer:
         self.real_time = 0
         self.fps = render_opt.fps
         self.effect_sound_player = hit_effect_player(init_chart.notes)
+
+        render_opt = copy.copy(render_opt)
+        if super_sampling:
+            render_opt.width *= 2
+            render_opt.height *= 2
         for line in init_chart.lines:
             self.judge_line_renderer_list.append(judge_line_renderer(line, self.window, render_opt))
 
