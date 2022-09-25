@@ -15,12 +15,12 @@ NOTE_DIRECTION_NORMAL = 0
 NOTE_DIRECTION_REVERSED = 1
 
 __all__ = ["NOTE_TYPE_TAP", "NOTE_TYPE_FLICK", "NOTE_TYPE_HOLD", "NOTE_TYPE_DRAG",
-           "speed_event", "phi_move_event", "phi_note", "phi_chart", "phi_event_base",
+           "phi_speed_event", "phi_move_event", "phi_note", "phi_chart", "phi_event_base",
            "phi_judge_line", "phi_rotate_event", "phi_ver3_event_base", "phi_disappear_event",
            "open_chart_file", "open_chart_string"]
 
 
-class speed_event:
+class phi_speed_event:
     __slots__ = ("start_time", "end_time", "floor_position", "value", "real_start_time", "real_end_time")
 
     def __init__(self, start_tm: float, end_tm: float, floor_pos: float, value: float, bpm: float):
@@ -113,7 +113,7 @@ class phi_disappear_event(phi_event_base):
 class phi_note:
     """Represents a note structure."""
     __slots__ = ("multi_highlight", "time", "note_type", "floor_position", "speed", "position_x", "hold_time",
-                 "real_hold_time", "real_time")
+                 "real_hold_time", "real_time", "note_direction")
 
     def __init__(self, tm: int, note_ty: int, floor_pos: float, speed: float,
                  pos_x: float, hold_tm: float, bpm: float, direction: int):
@@ -126,10 +126,24 @@ class phi_note:
         self.hold_time = hold_tm
         self.real_hold_time = hold_tm * 1.875 / bpm
         self.real_time = tm * 1.875 / bpm
+        self.note_direction = direction
+
+    def clone(self):
+        bpm = self.time * 1.875 / self.real_time if self.real_time != 0 else 120.0
+        return phi_note(self.time, self.note_type, self.floor_position, self.speed,
+                        self.position_x, self.hold_time, bpm, self.note_direction)
+
+    def mirror_x_position(self):
+        self.position_x = -self.position_x
+
+    def get_x_mirrored(self):
+        n = self.clone()
+        n.mirror_x_position()
+        return n
 
 
-def rearrange_speed_events(resolved_events: list[speed_event], bpm: float):
-    rearranged_events = list[speed_event]()
+def rearrange_speed_events(resolved_events: list[phi_speed_event], bpm: float):
+    rearranged_events = list[phi_speed_event]()
     for ev in resolved_events:
         if len(rearranged_events) == 0:
             rearranged_events.append(ev)
@@ -150,7 +164,7 @@ def get_speed_events_from_dict(content: dict, chart_ver: int):
     """Extracts speed events from judge line content. Chart version is required for parsing pattern determination."""
     bpm: float = content["bpm"]
     ev_list: list[dict] = content["speedEvents"]
-    ret = list[speed_event]()
+    ret = list[phi_speed_event]()
     y = 0.0
 
     for ev in ev_list:
@@ -163,7 +177,7 @@ def get_speed_events_from_dict(content: dict, chart_ver: int):
         else:
             floor_pos = y
             y += (end_tm - start_tm) * value * 1.875 / bpm
-        ret.append(speed_event(start_tm, end_tm, floor_pos, value, bpm))
+        ret.append(phi_speed_event(start_tm, end_tm, floor_pos, value, bpm))
 
     if chart_ver != 3:
         ret = rearrange_speed_events(ret, bpm)

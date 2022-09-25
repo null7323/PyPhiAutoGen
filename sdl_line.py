@@ -8,6 +8,8 @@ class sdl_line:
 
     def __init__(self, parent: sdl_renderer, w: int, h: int, init_color=(255, 255, 255, 255)):
         self.parent = parent
+
+        # Directly generate a new texture to fill.
         self.tex = sdl_texture.generate(parent, w, h, texture_access.render_target)
         self.w, self.h = w, h
         raw_target = parent.get_render_target()

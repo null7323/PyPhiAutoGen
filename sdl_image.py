@@ -7,6 +7,7 @@ class sdl_image:
     __slots__ = ("tex", "width", "height", "parent")
 
     def __init__(self, data: sdl_surface or None, parent: sdl_renderer):
+        """Using given SDL surface and renderer to initialize a new image instance."""
         self.parent = parent
         if data is None or parent is None:
             self.tex = None
@@ -61,8 +62,9 @@ class sdl_image:
         self.parent = None
 
     @classmethod
-    def open_image(cls, path: str, parent: sdl_renderer):
+    def open_image(cls, path: str, parent: sdl_renderer, file_size: (int, int) = (-1, -1)):
         s = IMG_Load(path.encode())
         ret = cls(sdl_surface(s), parent)
+        ret.width, ret.height = file_size
         SDL_FreeSurface(s)
         return ret
