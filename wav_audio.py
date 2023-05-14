@@ -14,7 +14,7 @@ class audio_file:
 
     @classmethod
     def init(cls):
-        Mix_OpenAudio(48000, sdl2.AUDIO_U16, 2, 256)
+        Mix_OpenAudio(48000, sdl2.AUDIO_S16, 2, 256)
         Mix_AllocateChannels(40)
 
     @classmethod
