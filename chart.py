@@ -172,7 +172,7 @@ def get_speed_events_from_dict(content: dict, chart_ver: int):
         end_tm = ev["endTime"]
         value = ev["value"]
 
-        if chart_ver == 3:  # most possible
+        if "floorPosition" in ev:  # most possible, so we put it ahead
             floor_pos = ev["floorPosition"]
         else:
             floor_pos = y
@@ -335,9 +335,6 @@ class phi_judge_line:
         self.index: int = index
         self.chart_version = chart_ver
         self.bpm: float = content["bpm"]
-        self.num_notes: int = content["numOfNotes"]
-        self.num_notes_above: int = max(content["numOfNotesAbove"], 0)
-        self.num_notes_below: int = max(content["numOfNotesBelow"], 0)
         self.speed_events = get_speed_events_from_dict(content, chart_ver)
         self.rotate_events: list[phi_rotate_event] = get_typed_ver1_events(
             content["judgeLineRotateEvents"], phi_rotate_event, self.bpm
@@ -348,6 +345,9 @@ class phi_judge_line:
         self.move_events = get_movement_events(content["judgeLineMoveEvents"], chart_ver, self.bpm)
         self.notes_above: list[phi_note] = get_notes(content, "notesAbove", self.bpm)
         self.notes_below: list[phi_note] = get_notes(content, "notesBelow", self.bpm)
+        self.num_notes_above: int = len(self.notes_above)
+        self.num_notes_below: int = len(self.notes_below)
+        self.num_notes: int = self.num_notes_above + self.num_notes_below
 
 
 class phi_chart:
@@ -362,8 +362,8 @@ class phi_chart:
         self.content: dict = content
         self.version: int = content["formatVersion"]
         self.offset: float = content["offset"]
-        self.numOfNotes: int = content["numOfNotes"]
-        self.lines: list[phi_judge_line] = list[phi_judge_line]()
+        self.numOfNotes: int = 0
+        self.lines: list[phi_judge_line] = []  # Use [] to initialize; BUILD_LIST code is faster.
         line_id = 0
         for data in content["judgeLineList"]:
             self.lines.append(phi_judge_line(data, line_id, self.version))
@@ -372,11 +372,13 @@ class phi_chart:
         for line in self.lines:
             self.notes += line.notes_above
             self.notes += line.notes_below
+            self.numOfNotes += line.num_notes
         self.notes.sort(key=lambda x: x.real_time, reverse=False)
 
         # creates a <time - note list> map to identify what notes should be highlighted.
         tm_map: dict[float, list[phi_note]] = {}
         for n in self.notes:
+            # tiny errors are allowed, so we call round().
             tm = round(n.real_time, 6)
             if tm not in tm_map.keys():
                 tm_map[tm] = [n, ]
